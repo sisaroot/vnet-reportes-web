@@ -1,20 +1,51 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, Key, ShieldCheck } from 'lucide-react';
+import { LogIn, Key, ShieldCheck, Loader } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export default function Login() {
     const [role, setRole] = useState('asesor'); // asesor | admin
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [errorMsg, setErrorMsg] = useState('');
     const navigate = useNavigate();
 
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
-        // Simulate login based on selected role
-        if (role === 'admin') {
-            navigate('/admin');
-        } else {
-            navigate('/asesor');
+        setLoading(true);
+        setErrorMsg('');
+
+        try {
+            const { data, error } = await supabase
+                .from('usuarios')
+                .select('*')
+                .eq('username', username)
+                .eq('password', password)
+                .eq('role', role)
+                .single();
+
+            if (error || !data) {
+                setErrorMsg('Credenciales incorrectas o rol equivocado.');
+                setLoading(false);
+                return;
+            }
+
+            // Guardar sesión básica en localStorage
+            localStorage.setItem('vnet_user', data.username);
+            localStorage.setItem('vnet_role', data.role);
+
+            // Redirigir basado en el rol real de la DB
+            if (data.role === 'admin') {
+                navigate('/admin');
+            } else {
+                navigate('/asesor');
+            }
+
+        } catch (err) {
+            console.error("Error login:", err);
+            setErrorMsg('Error de conexión con la base de datos.');
+            setLoading(false);
         }
     };
 
@@ -30,6 +61,11 @@ export default function Login() {
                 </div>
 
                 <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {errorMsg && (
+                        <div style={{ background: 'rgba(248, 81, 73, 0.1)', color: 'var(--accent-danger)', padding: '0.75rem', borderRadius: '4px', textAlign: 'center', fontSize: '0.9rem' }}>
+                            {errorMsg}
+                        </div>
+                    )}
 
                     <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(0,0,0,0.2)', padding: '0.5rem', borderRadius: '8px' }}>
                         <button
@@ -68,9 +104,9 @@ export default function Login() {
                         />
                     </div>
 
-                    <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem' }}>
-                        <LogIn size={18} />
-                        Ingresar
+                    <button type="submit" disabled={loading} className="btn btn-primary" style={{ marginTop: '0.5rem' }}>
+                        {loading ? <Loader className="spin" size={18} /> : <LogIn size={18} />}
+                        {loading ? 'Verificando...' : 'Ingresar'}
                     </button>
                 </form>
             </div>

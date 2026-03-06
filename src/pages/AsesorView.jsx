@@ -8,7 +8,7 @@ export default function AsesorView() {
     const [activeTab, setActiveTab] = useState('nuevo'); // nuevo | devueltos
     const [loading, setLoading] = useState(false);
 
-    const asesorActual = 'asesor_demo'; // Cambiar esto en el futuro cuando haya login completo
+    const asesorActual = localStorage.getItem('vnet_user') || 'asesor_desconocido';
 
     const [clientData, setClientData] = useState({
         cedula_contrato: '',

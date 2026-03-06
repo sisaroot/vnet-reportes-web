@@ -302,7 +302,7 @@ export default function AdminView() {
                                                         <button
                                                             className="btn"
                                                             style={{ background: 'rgba(255,255,255,0.1)', flex: 1, justifyContent: 'center' }}
-                                                            onClick={() => descargarImagen(p.imagen_url, `capture_${p.cedula_cuenta}_${idx}.png`)}
+                                                            onClick={() => descargarImagen(p.imagen_url, p.imagen_url.split('/').pop())}
                                                         >
                                                             <Download size={18} /> Descargar
                                                         </button>

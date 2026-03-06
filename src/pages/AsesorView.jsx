@@ -113,7 +113,13 @@ export default function AsesorView() {
 
             for (const pago of pagos) {
                 const fileExt = pago.file.name.split('.').pop();
-                const fileName = `${reporte_id}_${pago.id}.${fileExt}`;
+
+                // Limpiamos nombre y cédula para el nombre del archivo
+                const safeName = (clientData.nombre_cliente || 'Cliente').replace(/[^a-zA-Z0-9]/g, '_');
+                const safeCedula = (clientData.cedula_contrato || 'SinCedula').replace(/[^a-zA-Z0-9-]/g, '');
+
+                // Formato: Nombre_Cedula_IDReporte_IDPago.jpg
+                const fileName = `${safeName}_${safeCedula}_${reporte_id}_${pago.id}.${fileExt}`;
                 const filePath = `${asesorActual}/${fileName}`;
 
                 const { error: uploadError } = await supabase.storage

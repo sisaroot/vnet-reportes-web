@@ -13,7 +13,8 @@ export default function AsesorView() {
 
     const [clientData, setClientData] = useState({
         cedula_contrato: '',
-        nombre_cliente: '' // Auto-fill target
+        nombre_cliente: '', // Auto-fill target
+        observacion: ''
     });
 
     const [pagos, setPagos] = useState([
@@ -102,7 +103,8 @@ export default function AsesorView() {
                 .insert([{
                     asesor_id: asesorActual,
                     cedula_contrato: clientData.cedula_contrato,
-                    estado: 'pendiente'
+                    estado: 'pendiente',
+                    observacion: clientData.observacion
                 }])
                 .select()
                 .single();
@@ -146,7 +148,7 @@ export default function AsesorView() {
             }
 
             alert(`¡Reporte enviado exitosamente con ${pagos.length} pagos comprobados!`);
-            setClientData({ cedula_contrato: '', nombre_cliente: '' });
+            setClientData({ cedula_contrato: '', nombre_cliente: '', observacion: '' });
             setPagos([{ id: Date.now(), cedula_cuenta: '', telefono_bancario: '', fecha_pago: '', file: null, fileName: '' }]);
 
         } catch (error) {
@@ -256,6 +258,15 @@ export default function AsesorView() {
                                 />
                             </div>
                         </div>
+                        <div className="input-group" style={{ marginTop: '1rem', marginBottom: 0 }}>
+                            <label>Observación (Opcional)</label>
+                            <input
+                                type="text"
+                                placeholder="Ej: el contrato de la calle andres perez"
+                                value={clientData.observacion}
+                                onChange={e => setClientData({ ...clientData, observacion: e.target.value })}
+                            />
+                        </div>
                     </section>
 
                     <section className="glass-panel fade-in" style={{ animationDelay: '0.1s' }}>
@@ -355,6 +366,11 @@ export default function AsesorView() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
                                 <div>
                                     <h4 style={{ margin: '0 0 0.5rem 0' }}>Contrato: {rep.cedula_contrato}</h4>
+                                    {rep.observacion && (
+                                        <p style={{ margin: '0.25rem 0 0.5rem 0', color: '#fff', fontSize: '0.9rem' }}>
+                                            <strong>📝 Observación original:</strong> <i>{rep.observacion}</i>
+                                        </p>
+                                    )}
                                     <p style={{ margin: 0, color: 'var(--text-primary)', background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '4px', borderLeft: '3px solid var(--accent-danger)' }}>
                                         <strong>Mensaje del Admin:</strong><br /> "{rep.mensaje_admin}"
                                     </p>
@@ -394,6 +410,11 @@ export default function AsesorView() {
                         }}>
                             <div>
                                 <h4 style={{ margin: '0 0 0.5rem 0' }}>Contrato: {rep.cedula_contrato}</h4>
+                                {rep.observacion && (
+                                    <p style={{ margin: '0.25rem 0', color: '#fff', fontSize: '0.9rem' }}>
+                                        <strong>📝 Observación original:</strong> <i>{rep.observacion}</i>
+                                    </p>
+                                )}
                                 {rep.mensaje_admin && (
                                     <p style={{ margin: '0.5rem 0', color: 'var(--text-primary)', fontSize: '0.9rem' }}>
                                         <strong>Admin:</strong> {rep.mensaje_admin}

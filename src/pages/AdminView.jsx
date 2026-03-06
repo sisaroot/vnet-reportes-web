@@ -249,6 +249,11 @@ export default function AdminView() {
                                             <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                                                 Enviado por: <strong style={{ color: '#fff' }}>@{rep.asesor_id}</strong> | {new Date(rep.created_at).toLocaleString()}
                                             </p>
+                                            {rep.observacion && (
+                                                <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.95rem', color: '#fff' }}>
+                                                    <strong>📝 Observación:</strong> <i>{rep.observacion}</i>
+                                                </p>
+                                            )}
                                         </div>
                                         {activeTab === 'pendiente' && (
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>

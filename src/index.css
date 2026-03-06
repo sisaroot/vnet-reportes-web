@@ -6,7 +6,7 @@
   --bg-gradient: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
   --text-primary: #f0f6fc;
   --text-secondary: #8b949e;
-  
+
   /* Accents */
   --accent-primary: #58a6ff;
   --accent-primary-hover: #3182ce;
@@ -22,7 +22,7 @@
   /* Typography */
   --font-body: 'Inter', sans-serif;
   --font-heading: 'Outfit', sans-serif;
-  
+
   /* Layout */
   --border-radius: 12px;
   --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
@@ -51,7 +51,12 @@ body {
   min-height: 100vh;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-heading);
   font-weight: 600;
   margin-bottom: 0.5rem;
@@ -78,6 +83,7 @@ h1, h2, h3, h4, h5, h6 {
   opacity: 0.4;
   animation: float 10s infinite ease-in-out alternate;
 }
+
 .blob-1 {
   top: -10%;
   left: -10%;
@@ -85,6 +91,7 @@ h1, h2, h3, h4, h5, h6 {
   height: 40vw;
   background: #58a6ff;
 }
+
 .blob-2 {
   bottom: -10%;
   right: -10%;
@@ -96,13 +103,25 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Animations */
 @keyframes float {
-  0% { transform: translateY(0) scale(1); }
-  100% { transform: translateY(20px) scale(1.05); }
+  0% {
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    transform: translateY(20px) scale(1.05);
+  }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .fade-in {
@@ -138,6 +157,7 @@ h1, h2, h3, h4, h5, h6 {
   cursor: pointer;
   transition: var(--transition);
   text-decoration: none;
+  color: var(--text-primary);
 }
 
 .btn:disabled {

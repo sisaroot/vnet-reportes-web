@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, CheckCircle, Clock, Search, CornerUpLeft, X, Send, Camera, Eye, Loader, Download, Users, Trash2 } from 'lucide-react';
+import { LogOut, CheckCircle, Clock, Search, CornerUpLeft, X, Send, Camera, Eye, Loader, Download, Users, Trash2, KeyRound } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export default function AdminView() {
@@ -23,6 +23,11 @@ export default function AdminView() {
     const [reporteParaAprobar, setReporteParaAprobar] = useState(null);
     const [mensajeAprobacion, setMensajeAprobacion] = useState('');
     const [imagenAprobacion, setImagenAprobacion] = useState(null);
+
+    // Modal state para cambiar contraseña de asesor
+    const [modalPasswordAbierto, setModalPasswordAbierto] = useState(false);
+    const [asesorSeleccionado, setAsesorSeleccionado] = useState(null);
+    const [nuevaPassword, setNuevaPassword] = useState('');
 
     const [loading, setLoading] = useState(true);
     const [reportes, setReportes] = useState([]);
@@ -69,6 +74,35 @@ export default function AdminView() {
         } catch (error) {
             console.error("Error al eliminar asesor:", error);
             alert("Error al eliminar el asesor.");
+        }
+    };
+
+    const abrirCambioPassword = (asesor) => {
+        setAsesorSeleccionado(asesor);
+        setNuevaPassword('');
+        setModalPasswordAbierto(true);
+    };
+
+    const handleCambiarPassword = async (e) => {
+        e.preventDefault();
+        if (nuevaPassword.length < 6) {
+            alert("La contraseña debe tener al menos 6 caracteres.");
+            return;
+        }
+
+        try {
+            const { error } = await supabase
+                .from('usuarios')
+                .update({ password: nuevaPassword })
+                .eq('username', asesorSeleccionado.username);
+
+            if (error) throw error;
+
+            alert(`Contraseña de @${asesorSeleccionado.username} actualizada exitosamente.`);
+            setModalPasswordAbierto(false);
+        } catch (error) {
+            console.error("Error al cambiar contraseña:", error);
+            alert("Hubo un error al actualizar la contraseña.");
         }
     };
 
@@ -416,14 +450,24 @@ export default function AdminView() {
                                         <h4 style={{ margin: 0, color: 'var(--accent-primary)' }}>@{asesor.username}</h4>
                                         <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Rol: {asesor.role}</p>
                                     </div>
-                                    <button
-                                        className="btn"
-                                        style={{ background: 'rgba(248, 81, 73, 0.1)', color: 'var(--accent-danger)', padding: '0.5rem', minWidth: 'auto' }}
-                                        onClick={() => eliminarAsesor(asesor.username)}
-                                        title="Eliminar Asesor"
-                                    >
-                                        <Trash2 size={18} />
-                                    </button>
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <button
+                                            className="btn"
+                                            style={{ background: 'rgba(255, 255, 255, 0.1)', color: '#fff', padding: '0.5rem', minWidth: 'auto' }}
+                                            onClick={() => abrirCambioPassword(asesor)}
+                                            title="Cambiar Contraseña"
+                                        >
+                                            <KeyRound size={18} />
+                                        </button>
+                                        <button
+                                            className="btn"
+                                            style={{ background: 'rgba(248, 81, 73, 0.1)', color: 'var(--accent-danger)', padding: '0.5rem', minWidth: 'auto' }}
+                                            onClick={() => eliminarAsesor(asesor.username)}
+                                            title="Eliminar Asesor"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -550,6 +594,50 @@ export default function AdminView() {
                 </div>
             )}
 
+            {/* Modal de Cambio de Contraseña */}
+            {modalPasswordAbierto && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 1000, padding: '1rem'
+                }}>
+                    <div className="glass-panel fade-in" style={{ width: '100%', maxWidth: '400px', position: 'relative', borderTop: '4px solid var(--accent-primary)' }}>
+                        <button onClick={() => setModalPasswordAbierto(false)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                            <X size={24} />
+                        </button>
+
+                        <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-primary)' }}>
+                            <KeyRound size={24} /> Cambiar Contraseña
+                        </h3>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+                            Nueva contraseña para el asesor <strong>@{asesorSeleccionado?.username}</strong>.
+                        </p>
+
+                        <form onSubmit={handleCambiarPassword}>
+                            <div className="input-group">
+                                <label>Nueva Contraseña</label>
+                                <input
+                                    type="text"
+                                    required
+                                    placeholder="Mínimo 6 caracteres"
+                                    value={nuevaPassword}
+                                    onChange={(e) => setNuevaPassword(e.target.value)}
+                                />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                                <button type="button" className="btn" style={{ flex: 1, background: 'rgba(255,255,255,0.1)' }} onClick={() => setModalPasswordAbierto(false)}>
+                                    Cancelar
+                                </button>
+                                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                                    Guardar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Plus, Trash2, Send, Camera, AlertCircle, FileEdit, FileText, Loader } from 'lucide-react';
+import { LogOut, Plus, Trash2, Send, Camera, AlertCircle, FileEdit, FileText, Loader, CheckCircle, Eye } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export default function AsesorView() {
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState('nuevo'); // nuevo | devueltos
+    const [activeTab, setActiveTab] = useState('nuevo'); // nuevo | devueltos | aprobados
     const [loading, setLoading] = useState(false);
 
     const asesorActual = localStorage.getItem('vnet_user') || 'asesor_desconocido';
@@ -19,20 +19,22 @@ export default function AsesorView() {
     ]);
 
     const [reportesDevueltos, setReportesDevueltos] = useState([]);
+    const [reportesAprobados, setReportesAprobados] = useState([]); // Historial 
 
     useEffect(() => {
-        cargarDevueltos();
+        cargarListas();
     }, [activeTab]);
 
-    const cargarDevueltos = async () => {
+    const cargarListas = async () => {
         const { data, error } = await supabase
             .from('reportes')
             .select('*')
             .eq('asesor_id', asesorActual)
-            .eq('estado', 'devuelto');
+            .order('created_at', { ascending: false });
 
         if (!error && data) {
-            setReportesDevueltos(data);
+            setReportesDevueltos(data.filter(r => r.estado === 'devuelto'));
+            setReportesAprobados(data.filter(r => r.estado === 'procesado').slice(0, 10)); // Solo ultimos 10 aprobados guardados
         }
     };
 
@@ -59,7 +61,6 @@ export default function AsesorView() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Validacion
         for (const p of pagos) {
             if (!p.file) {
                 alert("Debes subir un comprobante para todos los pagos.");
@@ -70,12 +71,12 @@ export default function AsesorView() {
         setLoading(true);
 
         try {
-            // 1. Crear el reporte principal
             const { data: reporteData, error: reporteError } = await supabase
                 .from('reportes')
                 .insert([{
                     asesor_id: asesorActual,
-                    cedula_contrato: clientData.cedula_contrato
+                    cedula_contrato: clientData.cedula_contrato,
+                    estado: 'pendiente'
                 }])
                 .select()
                 .single();
@@ -84,25 +85,21 @@ export default function AsesorView() {
 
             const reporte_id = reporteData.id;
 
-            // 2. Subir imágenes e insertar pagos asociados
             for (const pago of pagos) {
                 const fileExt = pago.file.name.split('.').pop();
                 const fileName = `${reporte_id}_${pago.id}.${fileExt}`;
                 const filePath = `${asesorActual}/${fileName}`;
 
-                // Subir Storage
                 const { error: uploadError } = await supabase.storage
                     .from('comprobantes')
                     .upload(filePath, pago.file);
 
                 if (uploadError) throw uploadError;
 
-                // Obtener URL pública
                 const { data: publicUrlData } = supabase.storage
                     .from('comprobantes')
                     .getPublicUrl(filePath);
 
-                // Guardar en tabla de pagos asociados
                 const { error: pagoError } = await supabase
                     .from('pagos_asociados')
                     .insert([{
@@ -117,8 +114,6 @@ export default function AsesorView() {
             }
 
             alert(`¡Reporte enviado exitosamente con ${pagos.length} pagos comprobados!`);
-
-            // Limpiar formulario
             setClientData({ cedula_contrato: '' });
             setPagos([{ id: Date.now(), cedula_cuenta: '', telefono_bancario: '', fecha_pago: '', file: null, fileName: '' }]);
 
@@ -131,11 +126,15 @@ export default function AsesorView() {
     };
 
     const corregirReporte = async (reporte) => {
-        // En una app real, aqui se cargarian los `pagos_asociados` y se traerian los datos.
-        // Simulando cargar datos:
         setClientData({ cedula_contrato: reporte.cedula_contrato });
-        alert("Cédula recuperada. Complete los pagos con las correcciones requeridas.");
+        alert("Cédula recuperada. Reconstruya los pagos con las correcciones indicadas por el administrador.");
         setActiveTab('nuevo');
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('vnet_user');
+        localStorage.removeItem('vnet_role');
+        navigate('/login');
     };
 
     return (
@@ -145,24 +144,24 @@ export default function AsesorView() {
                     <h1 style={{ fontSize: '1.75rem', margin: 0 }}>Panel de Asesor</h1>
                     <p style={{ color: 'var(--text-secondary)' }}>VNET - Gestión de Pagos</p>
                 </div>
-                <button className="btn" style={{ background: 'var(--glass-bg)', color: 'var(--accent-danger)' }} onClick={() => navigate('/login')}>
+                <button className="btn" style={{ background: 'var(--glass-bg)', color: 'var(--accent-danger)' }} onClick={handleLogout}>
                     <LogOut size={18} />
                     <span className="hide-mobile">Salir</span>
                 </button>
             </header>
 
             {/* Tabs */}
-            <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
                 <button
                     className="btn"
-                    style={{ flex: 1, background: activeTab === 'nuevo' ? 'var(--accent-primary)' : 'var(--glass-bg)', color: '#fff' }}
+                    style={{ flex: 1, minWidth: '120px', background: activeTab === 'nuevo' ? 'var(--accent-primary)' : 'var(--glass-bg)', color: '#fff' }}
                     onClick={() => setActiveTab('nuevo')}
                 >
-                    <FileText size={18} /> Nuevo Reporte
+                    <FileText size={18} /> Reportar
                 </button>
                 <button
                     className="btn"
-                    style={{ flex: 1, position: 'relative', background: activeTab === 'devueltos' ? 'var(--accent-danger)' : 'var(--glass-bg)', color: '#fff' }}
+                    style={{ flex: 1, minWidth: '120px', position: 'relative', background: activeTab === 'devueltos' ? 'var(--accent-danger)' : 'var(--glass-bg)', color: '#fff' }}
                     onClick={() => setActiveTab('devueltos')}
                 >
                     <AlertCircle size={18} /> Por Corregir
@@ -172,12 +171,18 @@ export default function AsesorView() {
                         </span>
                     )}
                 </button>
+                <button
+                    className="btn"
+                    style={{ flex: 1, minWidth: '120px', background: activeTab === 'aprobados' ? 'var(--accent-success)' : 'var(--glass-bg)', color: '#fff' }}
+                    onClick={() => setActiveTab('aprobados')}
+                >
+                    <CheckCircle size={18} /> Aprobados
+                </button>
             </div>
 
-            {activeTab === 'nuevo' ? (
+            {activeTab === 'nuevo' && (
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
 
-                    {/* Datos del Cliente */}
                     <section className="glass-panel fade-in">
                         <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <span style={{ color: 'var(--accent-primary)' }}>1.</span> Identificación
@@ -194,7 +199,6 @@ export default function AsesorView() {
                         </div>
                     </section>
 
-                    {/* Pagos / Transferencias */}
                     <section className="glass-panel fade-in" style={{ animationDelay: '0.1s' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -248,7 +252,6 @@ export default function AsesorView() {
                                         </div>
                                     </div>
 
-                                    {/* Componente de Archivos */}
                                     <div className="input-group" style={{ margin: 0 }}>
                                         <label>Comprobante o Captura</label>
                                         <div style={{
@@ -280,7 +283,9 @@ export default function AsesorView() {
                     </div>
 
                 </form>
-            ) : (
+            )}
+
+            {activeTab === 'devueltos' && (
                 <div className="glass-panel fade-in">
                     <h3 style={{ margin: '0 0 1.5rem 0', color: 'var(--accent-danger)' }}>Reportes con Errores</h3>
                     {reportesDevueltos.map(rep => (
@@ -297,7 +302,7 @@ export default function AsesorView() {
                                     {rep.imagen_admin_url && (
                                         <div style={{ marginTop: '1rem' }}>
                                             <a href={rep.imagen_admin_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-primary)', textDecoration: 'none' }}>
-                                                <Camera size={16} /> <span>El administrador adjuntó una imagen de referencia. (Ver)</span>
+                                                <Camera size={16} /> <span>Ver imagen de referencia adjunta.</span>
                                             </a>
                                         </div>
                                     )}
@@ -310,6 +315,35 @@ export default function AsesorView() {
                     ))}
                     {reportesDevueltos.length === 0 && (
                         <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem' }}>No tienes reportes devueltos.</p>
+                    )}
+                </div>
+            )}
+
+            {activeTab === 'aprobados' && (
+                <div className="glass-panel fade-in">
+                    <h3 style={{ margin: '0 0 1.5rem 0', color: 'var(--accent-success)' }}>Últimos Pagos Aprobados</h3>
+                    {reportesAprobados.map(rep => (
+                        <div key={rep.id} style={{
+                            background: 'rgba(46, 160, 67, 0.1)', border: '1px solid rgba(46, 160, 67, 0.3)',
+                            padding: '1.5rem', borderRadius: '8px', marginBottom: '1rem'
+                        }}>
+                            <div>
+                                <h4 style={{ margin: '0 0 0.5rem 0' }}>Contrato: {rep.cedula_contrato}</h4>
+                                {rep.mensaje_admin && (
+                                    <p style={{ margin: '0.5rem 0', color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                                        <strong>Admin:</strong> {rep.mensaje_admin}
+                                    </p>
+                                )}
+                                {rep.imagen_admin_url && (
+                                    <a href={rep.imagen_admin_url} target="_blank" rel="noreferrer" className="btn" style={{ background: 'var(--accent-success)', color: '#fff', marginTop: '0.5rem', display: 'inline-flex' }}>
+                                        <Eye size={18} /> Ver Comprobante para Cliente
+                                    </a>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    {reportesAprobados.length === 0 && (
+                        <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem' }}>No hay reportes aprobados recientemente.</p>
                     )}
                 </div>
             )}

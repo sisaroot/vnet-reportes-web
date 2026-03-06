@@ -25,9 +25,18 @@ export default function AsesorView() {
 
     // Auto-completado de nombre de cliente basado en Json local
     useEffect(() => {
-        const query = clientData.cedula_contrato.trim().toUpperCase();
-        if (query.length > 3) {
-            const found = clientesData.find(c => c.cedula.toUpperCase() === query);
+        const queryStr = clientData.cedula_contrato.trim();
+        const numericQueryStr = queryStr.replace(/\D/g, ''); // Quitar V, E, J, guiones, etc
+        const queryNumber = parseInt(numericQueryStr, 10); // Convertir 0030440573 -> 30440573
+
+        // Si ya tecleó al menos 5 o 6 números, empezamos a buscar
+        if (!isNaN(queryNumber) && numericQueryStr.length > 5) {
+            const found = clientesData.find(c => {
+                const numericDBStr = c.cedula.replace(/\D/g, '');
+                const dbNumber = parseInt(numericDBStr, 10);
+                return dbNumber === queryNumber;
+            });
+
             if (found) {
                 setClientData(prev => ({ ...prev, nombre_cliente: found.nombre }));
             } else {

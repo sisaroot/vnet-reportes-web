@@ -1,0 +1,6 @@
+# Pega debajo de esta línea todas tus cédulas y nombres como los tengas.
+# Yo luego me encargo de limpiarlos y convertirlos en el archivo JSON.
+# Ejemplo de lo que puedes pegar:
+# V0030440573 Cesar
+# V-12345678 Juan Perez
+# J-12345678-9 Empresa C.A.

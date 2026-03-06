@@ -1,0 +1,14 @@
+[
+  {
+    "cedula": "V-12345678",
+    "nombre": "Juan Pérez"
+  },
+  {
+    "cedula": "V-87654321",
+    "nombre": "María González"
+  },
+  {
+    "cedula": "J-12345678-9",
+    "nombre": "Empresa C.A."
+  }
+]

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Plus, Trash2, Send, Camera, AlertCircle, FileEdit, FileText, Loader, CheckCircle, Eye } from 'lucide-react';
+import { LogOut, Plus, Trash2, Send, Camera, AlertCircle, FileEdit, FileText, Loader, CheckCircle, Eye, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import clientesData from '../data/clientes.json';
 
 export default function AsesorView() {
     const navigate = useNavigate();
@@ -12,6 +13,7 @@ export default function AsesorView() {
 
     const [clientData, setClientData] = useState({
         cedula_contrato: '',
+        nombre_cliente: '' // Auto-fill target
     });
 
     const [pagos, setPagos] = useState([
@@ -20,6 +22,21 @@ export default function AsesorView() {
 
     const [reportesDevueltos, setReportesDevueltos] = useState([]);
     const [reportesAprobados, setReportesAprobados] = useState([]); // Historial 
+
+    // Auto-completado de nombre de cliente basado en Json local
+    useEffect(() => {
+        const query = clientData.cedula_contrato.trim().toUpperCase();
+        if (query.length > 3) {
+            const found = clientesData.find(c => c.cedula.toUpperCase() === query);
+            if (found) {
+                setClientData(prev => ({ ...prev, nombre_cliente: found.nombre }));
+            } else {
+                setClientData(prev => ({ ...prev, nombre_cliente: '' }));
+            }
+        } else {
+            setClientData(prev => ({ ...prev, nombre_cliente: '' }));
+        }
+    }, [clientData.cedula_contrato]);
 
     useEffect(() => {
         cargarListas();
@@ -114,7 +131,7 @@ export default function AsesorView() {
             }
 
             alert(`¡Reporte enviado exitosamente con ${pagos.length} pagos comprobados!`);
-            setClientData({ cedula_contrato: '' });
+            setClientData({ cedula_contrato: '', nombre_cliente: '' });
             setPagos([{ id: Date.now(), cedula_cuenta: '', telefono_bancario: '', fecha_pago: '', file: null, fileName: '' }]);
 
         } catch (error) {
@@ -126,9 +143,27 @@ export default function AsesorView() {
     };
 
     const corregirReporte = async (reporte) => {
-        setClientData({ cedula_contrato: reporte.cedula_contrato });
+        setClientData({ cedula_contrato: reporte.cedula_contrato, nombre_cliente: '' });
         alert("Cédula recuperada. Reconstruya los pagos con las correcciones indicadas por el administrador.");
         setActiveTab('nuevo');
+    };
+
+    const descargarImagen = async (url, nombreArchivo) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const urlBlob = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = urlBlob;
+            a.download = nombreArchivo || 'comprobante_vnet.png';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(urlBlob);
+        } catch (error) {
+            console.error("No se pudo descargar:", error);
+            window.open(url, '_blank');
+        }
     };
 
     const handleLogout = () => {
@@ -191,9 +226,18 @@ export default function AsesorView() {
                             <div className="input-group" style={{ margin: 0 }}>
                                 <label>Cédula de Contrato del Titular</label>
                                 <input
-                                    type="text" required placeholder="V-12345678"
+                                    type="text" required placeholder="Ej: V-12345678"
                                     value={clientData.cedula_contrato}
                                     onChange={e => setClientData({ ...clientData, cedula_contrato: e.target.value })}
+                                />
+                            </div>
+                            <div className="input-group" style={{ margin: 0, opacity: clientData.nombre_cliente ? 1 : 0.5 }}>
+                                <label>Nombre del Titular (Auto-completado)</label>
+                                <input
+                                    type="text" disabled
+                                    placeholder={clientData.cedula_contrato.length > 3 ? "No encontrado en base de datos" : "Escribe la CI primero"}
+                                    value={clientData.nombre_cliente}
+                                    style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--accent-success)', fontWeight: 'bold' }}
                                 />
                             </div>
                         </div>
@@ -300,10 +344,16 @@ export default function AsesorView() {
                                         <strong>Mensaje del Admin:</strong><br /> "{rep.mensaje_admin}"
                                     </p>
                                     {rep.imagen_admin_url && (
-                                        <div style={{ marginTop: '1rem' }}>
-                                            <a href={rep.imagen_admin_url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-primary)', textDecoration: 'none' }}>
-                                                <Camera size={16} /> <span>Ver imagen de referencia adjunta.</span>
+                                        <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
+                                            <a href={rep.imagen_admin_url} target="_blank" rel="noreferrer" className="btn" style={{ background: 'var(--glass-bg)', color: 'var(--accent-primary)', textDecoration: 'none', padding: '0.4rem 0.8rem' }}>
+                                                <Eye size={16} /> <span>Ver captura</span>
                                             </a>
+                                            <button
+                                                className="btn"
+                                                onClick={() => descargarImagen(rep.imagen_admin_url, `devuelto_${rep.cedula_contrato}.png`)}
+                                                style={{ background: 'var(--glass-bg)', color: 'var(--text-secondary)', padding: '0.4rem 0.8rem' }}>
+                                                <Download size={16} /> Descargar
+                                            </button>
                                         </div>
                                     )}
                                 </div>
@@ -335,9 +385,18 @@ export default function AsesorView() {
                                     </p>
                                 )}
                                 {rep.imagen_admin_url && (
-                                    <a href={rep.imagen_admin_url} target="_blank" rel="noreferrer" className="btn" style={{ background: 'var(--accent-success)', color: '#fff', marginTop: '0.5rem', display: 'inline-flex' }}>
-                                        <Eye size={18} /> Ver Comprobante para Cliente
-                                    </a>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '1rem' }}>
+                                        <a href={rep.imagen_admin_url} target="_blank" rel="noreferrer" className="btn" style={{ background: 'var(--accent-success)', color: '#fff', flex: 1, minWidth: '150px', justifyContent: 'center' }}>
+                                            <Eye size={18} /> Ver para Cliente
+                                        </a>
+                                        <button
+                                            className="btn"
+                                            onClick={() => descargarImagen(rep.imagen_admin_url, `aprobado_${rep.cedula_contrato}.png`)}
+                                            style={{ background: 'var(--glass-bg)', color: '#fff', flex: 1, minWidth: '150px', justifyContent: 'center' }}
+                                        >
+                                            <Download size={18} /> Descargar Archivo
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         </div>

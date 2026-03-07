@@ -225,10 +225,15 @@ export default function AsesorView() {
                 </button>
                 <button
                     className="btn"
-                    style={{ flex: 1, minWidth: '120px', background: activeTab === 'aprobados' ? 'var(--accent-success)' : 'var(--glass-bg)', color: '#fff' }}
+                    style={{ flex: 1, minWidth: '120px', position: 'relative', background: activeTab === 'aprobados' ? 'var(--accent-success)' : 'var(--glass-bg)', color: '#fff' }}
                     onClick={() => setActiveTab('aprobados')}
                 >
                     <CheckCircle size={18} /> Aprobados
+                    {reportesAprobados.length > 0 && (
+                        <span style={{ position: 'absolute', top: '-5px', right: '-5px', background: 'white', color: 'var(--accent-success)', borderRadius: '50%', width: '20px', height: '20px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                            {reportesAprobados.length}
+                        </span>
+                    )}
                 </button>
             </div>
 

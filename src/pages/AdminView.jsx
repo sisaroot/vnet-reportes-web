@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, CheckCircle, Clock, Search, CornerUpLeft, X, Send, Camera, Eye, Loader, Download, Users, Trash2, KeyRound } from 'lucide-react';
+import { LogOut, CheckCircle, Clock, Search, CornerUpLeft, X, Send, Camera, Eye, Loader, Download, Users, Trash2, KeyRound, Database, Upload } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export default function AdminView() {
@@ -29,6 +29,11 @@ export default function AdminView() {
     const [asesorSeleccionado, setAsesorSeleccionado] = useState(null);
     const [nuevaPassword, setNuevaPassword] = useState('');
 
+    // Actualizar Base de Clientes
+    const [archivoCarga, setArchivoCarga] = useState(null);
+    const [loadingCarga, setLoadingCarga] = useState(false);
+    const [resultadoCarga, setResultadoCarga] = useState(null);
+
     const [loading, setLoading] = useState(true);
     const [reportes, setReportes] = useState([]);
     const [pagosAsociados, setPagosAsociados] = useState({}); // Mapa reporte_id -> pagos[]
@@ -37,7 +42,7 @@ export default function AdminView() {
     useEffect(() => {
         if (activeTab === 'asesores') {
             cargarAsesores();
-        } else {
+        } else if (activeTab === 'pendiente' || activeTab === 'procesado') {
             cargarReportes();
         }
     }, [activeTab]);
@@ -260,6 +265,118 @@ export default function AdminView() {
         }
     };
 
+    // ===== MANEJO DE ARCHIVOS DE CLIENTES =====
+    const handleFileChangeCarga = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setArchivoCarga(file);
+            setResultadoCarga(null);
+        }
+    };
+
+    const handleSubirClientes = async () => {
+        if (!archivoCarga) return;
+
+        setLoadingCarga(true);
+        setResultadoCarga(null);
+
+        const reader = new FileReader();
+
+        reader.onload = async (e) => {
+            try {
+                const text = e.target.result;
+                const lines = text.split(/\r?\n/);
+                const clientesAInsertar = [];
+                let omitidos = 0;
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+
+                    // El formato de usuario es "Nombre \t Cédula" o "Nombre, Cédula" y sin encabezados
+                    // Separamos por tabulación, comas, o punto y coma
+                    let parts = line.split(/\t|;|,/);
+
+                    // Si no funciono por tabulacion o comas, y parece todo pegado con espacios...
+                    // Hay que aplicar un regex mas complejo, pero el TXT que mostraste está separado por tabs/comas
+
+                    if (parts.length < 2) continue; // no hay al menos 2 columnas
+
+                    let nombreRaw = parts[0].trim();
+                    let cedulaRaw = parts[1].trim();
+
+                    // Ignorar la fila si sabemos que son los encabezados (ej: CELDA A1: NOMBRE, CELDA B1: CEDULA)
+                    if (nombreRaw.toUpperCase() === 'NOMBRE' || cedulaRaw.toUpperCase() === 'CEDULA' || nombreRaw.toUpperCase() === 'CEDULA' || cedulaRaw.toUpperCase() === 'NOMBRE') {
+                        continue;
+                    }
+
+                    // Limpieza: Quitamos todo lo que no sea alfanumérico o guión. 
+                    let cedulaLimpia = cedulaRaw.replace(/[^VEJG0-9-]/gi, '').toUpperCase();
+
+                    // Si la cédula termina en -001, -002, etc. borramos esa parte para quedarnos solo con el RIF principal
+                    cedulaLimpia = cedulaLimpia.replace(/-\d{1,4}$/, '');
+                    // Limitar a máximo de largos de cédula posibles
+                    if (cedulaLimpia.length < 5) continue; // Cedulas inconsistentes omitir
+
+                    // Verificamos si los campos están invertidos "Cedula \t Nombre"
+                    if (nombreRaw.match(/^[VEJG0-9-]+$/i) && !cedulaLimpia.match(/^[VEJG0-9-]+$/i)) {
+                        let temp = cedulaLimpia;
+                        cedulaLimpia = nombreRaw.replace(/[^VEJG0-9-]/gi, '').toUpperCase();;
+                        nombreRaw = temp;
+                    }
+
+                    if (cedulaLimpia && nombreRaw) {
+                        clientesAInsertar.push({
+                            cedula: cedulaLimpia,
+                            nombre: nombreRaw
+                        });
+                    } else {
+                        omitidos++;
+                    }
+                }
+
+                if (clientesAInsertar.length === 0) {
+                    throw new Error("No se pudo detectar ningún cliente válido en el archivo. Revisa el formato.");
+                }
+
+                // Subir a Supabase por lotes usando upsert (para evitar duplicados via Primary Key)
+                // Supabase permite de a 1000 MAX aprox por request, los partimos.
+                const loteSize = 500;
+                let procesados = 0;
+
+                for (let i = 0; i < clientesAInsertar.length; i += loteSize) {
+                    const chunk = clientesAInsertar.slice(i, i + loteSize);
+
+                    const { error } = await supabase
+                        .from('clientes')
+                        .upsert(chunk, { onConflict: 'cedula', ignoreDuplicates: true }); // Si ya existe Cedula, NO sobrescribir (así no perdemos info). O cambia ignoreDuplicates: false si quieres actualizar nombres.
+
+                    if (error) throw error;
+                    procesados += chunk.length;
+                }
+
+                setResultadoCarga({
+                    success: true,
+                    totalEnArchivo: lines.length,
+                    procesadosValidos: procesados,
+                    mensaje: `¡Se insertaron/actualizaron ${procesados} registros en la base de datos!`
+                });
+
+            } catch (err) {
+                console.error("Error leyendo archivo:", err);
+                setResultadoCarga({
+                    success: false,
+                    mensaje: err.message || "Ocurrió un error al procesar el archivo. Revisa el formato."
+                });
+            } finally {
+                setLoadingCarga(false);
+                setArchivoCarga(null);
+            }
+        };
+
+        reader.readAsText(archivoCarga);
+    };
+
     const handleLogout = () => {
         localStorage.removeItem('vnet_user');
         localStorage.removeItem('vnet_role');
@@ -308,6 +425,13 @@ export default function AdminView() {
                     onClick={() => setActiveTab('asesores')}
                 >
                     <Users size={18} /> Asesores
+                </button>
+                <button
+                    className="btn"
+                    style={{ flex: 1, minWidth: '120px', background: activeTab === 'basedatos' ? 'var(--accent-warning)' : 'var(--glass-bg)', color: '#fff' }}
+                    onClick={() => setActiveTab('basedatos')}
+                >
+                    <Database size={18} /> Actualizar BD
                 </button>
             </div>
 
@@ -475,6 +599,75 @@ export default function AdminView() {
                         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
                             <Users size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
                             <p>No hay asesores registrados en el sistema.</p>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Pestaña de Carga Base de Datos Clientes */}
+            {activeTab === 'basedatos' && (
+                <div className="glass-panel fade-in">
+                    <h3 style={{ margin: '0 0 1.5rem 0', color: 'var(--accent-warning)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Database size={20} /> Actualizar Base de Datos de Clientes
+                    </h3>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+                        Sube aquí el archivo <code>.txt</code> o <code>.csv</code> con la base de datos de VNET.<br />
+                        El sistema leerá cada línea para extraer las cédulas y nombres, e insertará en la Base de Datos online descartando los repetidos.
+                    </p>
+
+                    <div style={{ background: 'var(--glass-bg)', padding: '1.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '1.5rem' }}>
+                        <div style={{
+                            border: '2px dashed var(--glass-border)', borderRadius: '8px',
+                            padding: '2.5rem 1rem', textAlign: 'center', cursor: 'pointer', position: 'relative',
+                            background: archivoCarga ? 'rgba(46, 160, 67, 0.1)' : 'rgba(255,255,255,0.02)',
+                            transition: 'all 0.2s'
+                        }}>
+                            <input
+                                type="file" accept=".csv,.txt"
+                                onChange={handleFileChangeCarga}
+                                style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }}
+                            />
+                            <Upload size={36} color={archivoCarga ? 'var(--accent-success)' : 'var(--text-secondary)'} style={{ marginBottom: '1rem' }} />
+                            <h4 style={{ margin: '0 0 0.5rem 0', color: archivoCarga ? 'var(--accent-success)' : '#fff' }}>
+                                {archivoCarga ? archivoCarga.name : 'Haz clic o arrastra un archivo .TXT o .CSV aquí'}
+                            </h4>
+                            <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                Tamaño: {archivoCarga ? (archivoCarga.size / 1024).toFixed(2) + ' KB' : 'Máximo recomendado: 5MB'}
+                            </p>
+                        </div>
+
+                        <div style={{ marginTop: '1.5rem', textAlign: 'right' }}>
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleSubirClientes}
+                                disabled={!archivoCarga || loadingCarga}
+                                style={{ padding: '0.75rem 2rem', width: '100%', maxWidth: '300px', display: 'inline-flex', justifyContent: 'center' }}
+                            >
+                                {loadingCarga ? <Loader className="spin" size={20} /> : <Database size={20} />}
+                                {loadingCarga ? "Subiendo a la DB..." : "Sincronizar a Supabase"}
+                            </button>
+                        </div>
+                    </div>
+
+                    {resultadoCarga && (
+                        <div className="fade-in" style={{
+                            padding: '1.5rem', borderRadius: '8px',
+                            background: resultadoCarga.success ? 'rgba(46, 160, 67, 0.15)' : 'rgba(248, 81, 73, 0.15)',
+                            border: `1px solid ${resultadoCarga.success ? 'var(--accent-success)' : 'var(--accent-danger)'}`,
+                            color: '#fff'
+                        }}>
+                            <h4 style={{ margin: '0 0 0.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: resultadoCarga.success ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                                {resultadoCarga.success ? <CheckCircle size={20} /> : <X size={20} />}
+                                {resultadoCarga.success ? 'Proceso Completado' : 'Error en Sincronización'}
+                            </h4>
+                            <p style={{ margin: '0 0 1rem 0' }}>{resultadoCarga.mensaje}</p>
+
+                            {resultadoCarga.success && (
+                                <ul style={{ margin: 0, paddingLeft: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+                                    <li>Líneas analizadas: {resultadoCarga.totalEnArchivo}</li>
+                                    <li>Registros váldos insertados: {resultadoCarga.procesadosValidos}</li>
+                                </ul>
+                            )}
                         </div>
                     )}
                 </div>

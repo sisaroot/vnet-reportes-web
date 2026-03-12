@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Plus, Trash2, Send, Camera, AlertCircle, FileEdit, FileText, Loader, CheckCircle, Eye, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import clientesData from '../data/clientes.json';
-
 export default function AsesorView() {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('nuevo'); // nuevo | devueltos | aprobados
@@ -24,27 +22,34 @@ export default function AsesorView() {
     const [reportesDevueltos, setReportesDevueltos] = useState([]);
     const [reportesAprobados, setReportesAprobados] = useState([]); // Historial 
 
-    // Auto-completado de nombre de cliente basado en Json local
+    const [buscarClienteTimeOut, setBuscarClienteTimeOut] = useState(null);
+
+    // Auto-completado de nombre de cliente basado en DB de Supabase
     useEffect(() => {
         const queryStr = clientData.cedula_contrato.trim();
         const numericQueryStr = queryStr.replace(/\D/g, ''); // Quitar V, E, J, guiones, etc
-        const queryNumber = parseInt(numericQueryStr, 10); // Convertir 0030440573 -> 30440573
 
         // Si ya tecleó al menos 5 o 6 números, empezamos a buscar
-        if (!isNaN(queryNumber) && numericQueryStr.length > 5) {
-            const found = clientesData.find(c => {
-                const numericDBStr = c.cedula.replace(/\D/g, '');
-                const dbNumber = parseInt(numericDBStr, 10);
-                return dbNumber === queryNumber;
-            });
+        if (numericQueryStr.length > 5) {
+            if (buscarClienteTimeOut) clearTimeout(buscarClienteTimeOut);
 
-            if (found) {
-                setClientData(prev => ({ ...prev, nombre_cliente: found.nombre }));
-            } else {
-                setClientData(prev => ({ ...prev, nombre_cliente: '' }));
-            }
-        } else {
-            setClientData(prev => ({ ...prev, nombre_cliente: '' }));
+            const timeout = setTimeout(async () => {
+                // Hacemos una búsqueda tipo LIKE/ILIKE a la base de datos de supabase
+                // Se asume que en base de datos la cedula original tiene la letra, pero buscaremos las que contengan esos numeros
+                const { data, error } = await supabase
+                    .from('clientes')
+                    .select('nombre')
+                    .ilike('cedula', `%${numericQueryStr}%`)
+                    .limit(1);
+
+                if (!error && data && data.length > 0) {
+                    setClientData(prev => ({ ...prev, nombre_cliente: data[0].nombre }));
+                } else {
+                    // Si no lo encuentra, lo dejamos vacio para que lo llene el asesor
+                }
+            }, 500); // 500ms delay debouncing
+
+            setBuscarClienteTimeOut(timeout);
         }
     }, [clientData.cedula_contrato]);
 
@@ -253,12 +258,13 @@ export default function AsesorView() {
                                     onChange={e => setClientData({ ...clientData, cedula_contrato: e.target.value })}
                                 />
                             </div>
-                            <div className="input-group" style={{ margin: 0, opacity: clientData.nombre_cliente ? 1 : 0.5 }}>
-                                <label>Nombre del Titular (Auto-completado)</label>
+                            <div className="input-group" style={{ margin: 0, opacity: clientData.nombre_cliente ? 1 : 0.8 }}>
+                                <label>Nombre del Titular (Editable)</label>
                                 <input
-                                    type="text" disabled
-                                    placeholder={clientData.cedula_contrato.length > 3 ? "No encontrado en base de datos" : "Escribe la CI primero"}
+                                    type="text" required
+                                    placeholder={clientData.cedula_contrato.length > 3 ? "No encontrado, escriba nombre..." : "Escribe la CI primero"}
                                     value={clientData.nombre_cliente}
+                                    onChange={e => setClientData({ ...clientData, nombre_cliente: e.target.value })}
                                     style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--accent-success)', fontWeight: 'bold' }}
                                 />
                             </div>
